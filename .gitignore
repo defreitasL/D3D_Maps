@@ -1,0 +1,14 @@
+# FOLDERS 
+.vscode/*
+tests/data
+env
+
+# FILES
+.env
+*.pyc
+*.log
+*.csv
+*.nc
+*.log
+!.vscode/tasks.json
+!.vscode/settings.json

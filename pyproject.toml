@@ -1,0 +1,23 @@
+[build-system]
+requires = ["flit_core >=2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "python_module"
+authors = [{name = "Name Lastname", email = "name.lastname@unican.es"}]
+readme = "README.md"
+dynamic = ["version", "description"]
+
+dependencies=[
+    "netCDF4", "scipy"
+]
+requires-python=">=3.6"
+
+[tool.flit.metadata]
+module = "python_module"
+author = "ame Lastname"
+author-email = "name.lastname@unican.es"
+home-page = "https://github.com/ihcantabria/IH.Template-Python"
+classifiers = [ "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",]
+description-file = "README.md"
+
