@@ -12,4 +12,4 @@ Description
 :snake: For code-development issues contact :man_technologist: [Lucas de Freitas](https://ihcantabria.com/directorio-personal/lucas-de-freitas-pereira/) @ :office: [IHCantabria](https://github.com/IHCantabria)
 
 ## :copyright: Credits
-Developed by :man_technologist: [Lucas de Freitas](https://ihcantabria.com/directorio-personal/lucas-de-freitas-pereira/) @ :office: [IHCantabria](https://github.com/IHCantabria).
+Developed by :man_technologist: [Lucas de Freitas](https://ihcantabria.com/directorio-personal/lucas-de-freitas-pereira/) @:office: [IHCantabria](https://github.com/IHCantabria).

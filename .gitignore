@@ -12,3 +12,4 @@ env
 *.log
 !.vscode/tasks.json
 !.vscode/settings.json
+D_Morpho.ipynb

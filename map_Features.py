@@ -6,8 +6,8 @@ import imageio
 import os
 from matplotlib.patches import FancyArrowPatch
 import contextily as cx
-from scipy.spatial import ConvexHull
 from matplotlib.path import Path
+import pyproj
 
 def get_limits(full_run, Obs, full_run_list, rounder):
     '''Get the limits for the plot'''
@@ -51,10 +51,10 @@ def get_map_ticks(corners, rounder):
 
     return x_ticks, y_ticks
 
-def draw_arrow_north(ax, pos):
+def draw_arrow_north(ax, pos, corners):
     '''Draw a north arrow'''
 
-    corners = ax.get_extent()
+    # corners = ax.get_extent()
 
     xy_tot = [corners[1] - corners[0], corners[3] - corners[2]]
 
@@ -88,10 +88,11 @@ def draw_arrow_north(ax, pos):
     ax.fill(xRose, yRose, color='white', edgecolor='k', linewidth=1.5, zorder=10)
     ax.plot([xRose[0],xRose[2]],[yRose[0],yRose[2]], color = 'k', lw = 1, ls='-', zorder=11)
 
-def draw_EPSG(ax, EPSG, pos):
+def draw_EPSG(ax, EPSG, pos, corners):
     '''Draw the EPSG code'''
 
-    corners = ax.get_extent()
+    # corners = ax.get_extent()
+
 
     EPSGdict = dict(boxstyle="round",
                     edgecolor="black",
@@ -112,55 +113,72 @@ def draw_EPSG(ax, EPSG, pos):
         ax.text(ax.get_xlim()[0]+desplEPSG[0], ax.get_ylim()[0]+desplEPSG[1],
             text_in, bbox=EPSGdict, fontweight='bold', verticalalignment='center', horizontalalignment='center', size = 8)
 
-def draw_map(EPSG, corners, rounder, north_arrow_bool, EPSG_bool, grid_bool):
+def draw_map(EPSG, corners, rounder, grid_bool, north_arrow_bool, EPSG_bool):
     '''Draw the map'''
 
-    corners = get_limits_map(corners, rounder)
+    corners_geo = get_limits_map(corners, rounder)
+    epsg_obj = ccrs.PlateCarree()
 
-    try:
-        epsg_obj = ccrs.epsg(f"{EPSG}")
-    except:
-        epsg_obj = ccrs.PlateCarree()
-    fh = (corners[1] - corners[0])
-    fw = (corners[3] - corners[2])
+    if EPSG != 4326:
+        gcs = pyproj.CRS.from_epsg(4326)
+        utm = pyproj.CRS.from_epsg(EPSG)
+        gcs_t = pyproj.Transformer.from_crs(utm, gcs, always_xy=True).transform
+        x1, y1 = gcs_t(corners_geo[0], corners_geo[2])
+        x2, y2 = gcs_t(corners_geo[1], corners_geo[3])
+        corners_geo = [x1, x2, y1, y2]
+        x_ticks, y_ticks = get_map_ticks(corners, rounder)
+        x_ticks_label = ["{:.0f}".format(k) for k in x_ticks]
+        y_ticks_label = ["{:.0f}".format(k) for k in y_ticks]
+        x_ticks, _ = gcs_t(x_ticks, np.zeros_like(x_ticks))
+        _, y_ticks = gcs_t(np.zeros_like(y_ticks), y_ticks)
+    else:
+        x_ticks, y_ticks = get_map_ticks(corners, rounder)
+        x_ticks_label = ["{:.2f}".format(k) for k in x_ticks]
+        y_ticks_label = ["{:.2f}".format(k) for k in y_ticks]
+
+
+
+    fh = (corners_geo[1] - corners_geo[0])
+    fw = (corners_geo[3] - corners_geo[2])
 
     fh = fh / np.max([fh, fw])
     fw = fw / np.max([fh, fw])
 
     fig = plt.figure(figsize=(12*fh, 8*fw))
-
     ax = fig.add_subplot(1, 1, 1, projection=epsg_obj)
- 
-    # ax.set_extent(corners, crs=epsg_obj)
-    ax.set_xlim([corners[0], corners[1]])
-    ax.set_ylim([corners[2], corners[3]])
-    # Add the tiles to the axis
-    # ax.add_image(tiler, zorder=0) #zoom_level, 
-    cx.add_basemap(ax, crs=epsg_obj, source=cx.providers.Esri.WorldImagery, reset_extent=False)
 
-    x_ticks, y_ticks = get_map_ticks(corners, rounder)
-    ax.set_xlim([corners[0], corners[1]])
-    ax.set_ylim([corners[2], corners[3]])
+    ax.set_xlim([corners_geo[0], corners_geo[1]])
+    ax.set_ylim([corners_geo[2], corners_geo[3]])
 
+    cx.add_basemap(ax, crs=epsg_obj,
+                   source=cx.providers.Esri.WorldImagery,
+                   reset_extent=False)
 
-    # mkInt = np.vectorize(lambda x: int(x))
+    ax.set_xlim([corners_geo[0], corners_geo[1]])
+    ax.set_ylim([corners_geo[2], corners_geo[3]])
 
     ax.set_xticks(x_ticks)
-    ax.set_xticklabels(x_ticks, rotation=45)
+    ax.set_xticklabels(x_ticks_label, rotation=45)
     ax.set_yticks(y_ticks)
-    ax.set_yticklabels(y_ticks, rotation=45)
-    ax.set_xlabel(r'$lon [\degree]$')
-    ax.set_ylabel(r'$lat [\degree]$')
+    ax.set_yticklabels(y_ticks_label, rotation=45)
+
+    if EPSG == 4326:
+        ax.set_xlabel(r'$lon [\degree]$')
+        ax.set_ylabel(r'$lat [\degree]$')
+    else:
+        ax.set_xlabel('X [m]')
+        ax.set_ylabel('Y [m]')
+
     if grid_bool:
         ax.grid(True, linestyle='--', alpha=0.5, linewidth=1)
     else:
         ax.grid(False)
 
     if north_arrow_bool:
-        draw_arrow_north(ax, 'topright')
+        draw_arrow_north(ax, 'topright', corners_geo)
 
     if EPSG_bool:
-        draw_EPSG(ax, EPSG, 'topleft')
+        draw_EPSG(ax, EPSG, 'topleft', corners_geo)
 
     return fig, ax
 
@@ -183,13 +201,13 @@ def draw_TpField(ax, x, y, Tp, cmap, alpha):
     cbar.set_label('Peak period [s]')
     cbar.set_ticks(np.arange(0, Tp_upper, 1))
 
-def draw_DirVector(ax, x, y, Dir, Hs):
+def draw_DirVector(ax, x, y, Dir, mag):
    
     Dir = 90.0 - Dir
     Dir[Dir < -180.0] += 360.0
 
-    u = np.sin(np.deg2rad(Dir)) * Hs
-    v = np.cos(np.deg2rad(Dir)) * Hs
+    u = np.sin(np.deg2rad(Dir)) * mag
+    v = np.cos(np.deg2rad(Dir)) * mag
 
     ax.quiver(x[0::2, 0::2],
               y[0::2, 0::2],
@@ -246,3 +264,20 @@ def gif_shoreline_evolution(run, obs, time_obs, idx, path):
 
     return
 
+def draw_generic_var(ax, x, y, var, cmap, alpha, var_id, units):
+    cbar_label = f'{var_id} [{units}]'
+    
+    # Calcular el límite superior e inferior redondeado
+    upper = np.ceil(np.nanmax(var))
+    lower = np.floor(np.nanmin(var))
+    
+    # Calcular el intervalo para tener 10 ticks
+    tick_interval = (upper - lower) / 10
+    ticks = np.arange(lower, upper + tick_interval, tick_interval)
+    
+    contour = ax.contourf(x, y, var, cmap=cmap, extend='both', alpha=alpha, vmin=lower, vmax=upper, zorder=1, levels=100, linestyles='none')
+    cbar = plt.colorbar(contour, ax=ax, fraction=0.036, pad=0.04)
+    cbar.set_label(cbar_label)
+    cbar.set_ticks(ticks)
+    
+    return contour, cbar
