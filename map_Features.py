@@ -8,6 +8,7 @@ from matplotlib.patches import FancyArrowPatch
 import contextily as cx
 from matplotlib.path import Path
 import pyproj
+import matplotlib.tri as tri
 
 def get_limits(full_run, Obs, full_run_list, rounder):
     '''Get the limits for the plot'''
@@ -144,7 +145,7 @@ def draw_map(EPSG, corners, rounder, grid_bool, north_arrow_bool, EPSG_bool):
     fh = fh / np.max([fh, fw])
     fw = fw / np.max([fh, fw])
 
-    fig = plt.figure(figsize=(12*fh, 8*fw))
+    fig = plt.figure(figsize=(12*fh, 8*fw), dpi = 300)
     ax = fig.add_subplot(1, 1, 1, projection=epsg_obj)
 
     ax.set_xlim([corners_geo[0], corners_geo[1]])
@@ -281,3 +282,111 @@ def draw_generic_var(ax, x, y, var, cmap, alpha, var_id, units):
     cbar.set_ticks(ticks)
     
     return contour, cbar
+
+def draw_var_nodes(ax, x, y, faces, var, cmap, alpha, var_id, units):
+
+    # x = ds['mesh2d_node_x'].values
+    # y = ds['mesh2d_node_y'].values
+    cbar_label = f'{var_id} [{units}]'
+    
+    upper = np.ceil(np.nanmax(var))
+    lower = np.floor(np.nanmin(var))
+    
+    tick_interval = (upper - lower) / 10
+    ticks = np.arange(lower, upper + tick_interval, tick_interval)
+
+    # faces = ds['mesh2d_face_nodes'].values - 1  # 1-based para 0-based
+
+    triangles = []
+    for face in faces:
+        if not np.any(face == -1):  
+            triangles.append([face[0], face[1], face[2]])
+            triangles.append([face[0], face[2], face[3]])
+
+    triangles = np.array(triangles)
+
+    triang = tri.Triangulation(x, y, triangles=triangles)
+
+    mask = np.all(~np.isnan(triang.triangles), axis=1)
+    triang.set_mask(~mask)
+
+    plt.figure(figsize=(10, 10))
+    contour = plt.tricontourf(triang, var, levels=100, cmap=cmap, extend='both', alpha=alpha, vmin=lower, vmax=upper, linestyles='none')
+    cbar = plt.colorbar(contour, ax=ax, fraction=0.036, pad=0.04)
+    cbar.set_label(cbar_label)
+    cbar.set_ticks(ticks)
+
+def draw_var_edges(ax, x, y, var, edges, cmap, alpha, var_id, units):
+    cbar_label = f'{var_id} [{units}]'
+    
+    upper = np.ceil(np.nanmax(var))
+    lower = np.floor(np.nanmin(var))
+    
+    tick_interval = (upper - lower) / 10
+    ticks = np.arange(lower, upper + tick_interval, tick_interval)
+
+    # Criar triangulação
+    triang = tri.Triangulation(x, y)
+    
+    # Associar valores dos edges aos nós (aqui usamos a média dos valores dos edges conectados a cada nó)
+    node_values = np.zeros_like(x)
+    node_counts = np.zeros_like(x)
+    for i, edge in enumerate(edges):
+        node_values[edge] += var[i]
+        node_counts[edge] += 1
+
+    node_values = node_values / node_counts
+
+    # Plotar contorno
+    contour = ax.tricontourf(triang, node_values, levels=100, cmap=cmap, extend='both', alpha=alpha, vmin=lower, vmax=upper, linestyles='none')
+    cbar = plt.colorbar(contour, ax=ax, fraction=0.036, pad=0.04)
+    cbar.set_label(cbar_label)
+    cbar.set_ticks(ticks)
+    ax.scatter(x, y, color='red', s=10, edgecolor='k')  # Opcional: para visualizar os pontos
+
+def draw_var_faces(ax, x, y, faces, var, cmap, alpha, var_id, units):
+    cbar_label = f'{var_id} [{units}]'
+    
+    # upper = np.ceil(np.nanmax(var))
+    # lower = np.floor(np.nanmin(var))
+
+    upper = np.nanmax(var)
+    lower = np.nanmin(var)
+
+    
+    tick_interval = (upper - lower) / 10
+    ticks = np.arange(lower, upper + tick_interval, tick_interval)
+
+    faces = faces - 1  # Ajustando índice de 1-based para 0-based
+
+    # Verificar se os índices das faces estão dentro do intervalo válido
+    max_index = np.max(faces)
+    if max_index >= len(x):
+        raise ValueError(f"Índice máximo {max_index} fora do intervalo para os pontos x com comprimento {len(x)}.")
+
+    triangles = []
+    face_values = []
+    for i, face in enumerate(faces):
+        if not np.any(face == -1):
+            if len(face) == 4:  # Garantir que a face tem 4 vértices
+                triangles.append([face[0], face[1], face[2]])
+                face_values.append(var[i])
+                triangles.append([face[0], face[2], face[3]])
+                face_values.append(var[i])
+            elif len(face) == 3:  # Caso a face já seja um triângulo
+                triangles.append([face[0], face[1], face[2]])
+                face_values.append(var[i])
+
+    triangles = np.array(triangles)
+    face_values = np.array(face_values)
+
+    triang = tri.Triangulation(x, y, triangles=triangles)
+
+    mask = np.all(~np.isnan(triang.triangles), axis=1)
+    triang.set_mask(~mask)
+
+    # Plotar usando tripcolor
+    tpc = ax.tripcolor(triang, face_values, cmap=cmap, alpha=alpha, vmin=lower, vmax=upper)
+    cbar = plt.colorbar(tpc, ax=ax, fraction=0.036, pad=0.04)
+    cbar.set_label(cbar_label)
+    cbar.set_ticks(ticks)
